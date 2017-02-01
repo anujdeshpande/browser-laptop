@@ -334,24 +334,39 @@ const doAction = (action) => {
       newFrame(action.frameOpts, action.openInForeground)
       break
     case windowConstants.WINDOW_CLOSE_FRAME:
-      // Use the frameProps we passed in, or default to the active frame
-      const frameProps = action.frameProps || frameStateUtil.getActiveFrame(windowState)
-      const index = frameStateUtil.getFramePropsIndex(windowState.get('frames'), frameProps)
-      const activeFrameKey = frameStateUtil.getActiveFrame(windowState).get('key')
-      windowState = windowState.merge(frameStateUtil.removeFrame(
-        windowState.get('frames'),
-        windowState.get('tabs'),
-        windowState.get('closedFrames'),
-        frameProps.set('closedAtIndex', index),
-        activeFrameKey,
-        index,
-        getSetting(settings.TAB_CLOSE_ACTION)
-      ))
-      // If we reach the limit of opened tabs per page while closing tabs, switch to
-      // the active tab's page otherwise the user will hang on empty page
-      if (frameStateUtil.getNonPinnedFrameCount(windowState) % getSetting(settings.TABS_PER_PAGE) === 0) {
-        updateTabPageIndex(frameStateUtil.getActiveFrame(windowState))
-        windowState = windowState.deleteIn(['ui', 'tabs', 'fixTabWidth'])
+      {
+        // Use the frameProps we passed in, or default to the active frame
+        const frameProps = action.frameProps || frameStateUtil.getActiveFrame(windowState)
+        const index = frameStateUtil.getFramePropsIndex(windowState.get('frames'), frameProps)
+        const hoverState = windowState.getIn(['frames', index, 'hoverState'])
+        const activeFrameKey = frameStateUtil.getActiveFrame(windowState).get('key')
+        windowState = windowState.merge(frameStateUtil.removeFrame(
+          windowState.get('frames'),
+          windowState.get('tabs'),
+          windowState.get('closedFrames'),
+          frameProps.set('closedAtIndex', index),
+          activeFrameKey,
+          index,
+          getSetting(settings.TAB_CLOSE_ACTION)
+        ))
+
+        const activeFrame = frameStateUtil.getActiveFrame(windowState)
+
+        // If we reach the limit of opened tabs per page while closing tabs, switch to
+        // the active tab's page otherwise the user will hang on empty page
+        if (frameStateUtil.getNonPinnedFrameCount(windowState) % getSetting(settings.TABS_PER_PAGE) === 0) {
+          updateTabPageIndex(activeFrame)
+          windowState = windowState.deleteIn(['ui', 'tabs', 'fixTabWidth'])
+        }
+
+        // Copy the hover state if tab closed with mouse
+        if (activeFrame && hoverState) {
+          doAction({
+            actionType: windowConstants.WINDOW_SET_TAB_HOVER_STATE,
+            frameProps: activeFrame,
+            hoverState: hoverState
+          })
+        }
       }
       break
     case windowConstants.WINDOW_UNDO_CLOSED_FRAME:
